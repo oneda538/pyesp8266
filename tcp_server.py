@@ -1,4 +1,5 @@
-import SocketServer
+import SocketServer, time
+
 
 class MyTCPHandler(SocketServer.BaseRequestHandler):
     """
@@ -12,14 +13,15 @@ class MyTCPHandler(SocketServer.BaseRequestHandler):
     def handle(self):
         # self.request is the TCP socket connected to the client
         self.data = self.request.recv(1024).strip()
-        #print "{} wrote:".format(self.client_address[0])
-	print "ClientIP:", self.client_address[0]
+        # print "{} wrote:".format(self.client_address[0])
+        print "{} :: ClientIP:{}".format(time.ctime(), self.client_address[0])
         print "Rx: ", self.data
         # just send back the same data, but upper-cased
-        #self.request.sendall(self.data.upper())
-	s = "ack"
-	print "Tx: ", s
-	self.request.sendall( s )
+        # self.request.sendall(self.data.upper())
+        s = "ack"
+        print "Tx: ", s
+        self.request.sendall(s)
+
 
 if __name__ == "__main__":
     HOST, PORT = "192.168.1.6", 8457
@@ -27,7 +29,7 @@ if __name__ == "__main__":
     # Create the server, binding to localhost on port 9999
     server = SocketServer.TCPServer((HOST, PORT), MyTCPHandler)
     print
-    print "Started: %s   Port: %d" % ( HOST, PORT )
+    print "Started: %s   Port: %d" % (HOST, PORT)
     print "Server: ", server
     print
 

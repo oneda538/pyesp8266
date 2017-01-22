@@ -32,6 +32,10 @@ def send_cmd(sCmd, waitTm=1, retry=1, sTerm=Status.OK):
                 ret.append(ser.readline().strip("\r\n"))
                 logging.debug(ret[-1])
                 lp = 0
+                print ret[-1], sTerm, ret[-1] in sTerm
+                if (ret[-1] in sTerm): break
+                # if( ret == 'ready' ): break
+                if (ret[-1] == Status.ERR): break
             if (ret[-1] in sTerm): break
             # if( ret == 'ready' ): break
             if (ret[-1] == Status.ERR): break
@@ -43,6 +47,20 @@ def send_cmd(sCmd, waitTm=1, retry=1, sTerm=Status.OK):
 
     logging.info("Command result: %s" % ret)
     return ret
+
+
+def rx_data(waitTm=1):
+    lp = 0.0
+    ret = []
+    while (lp < waitTm):  # Dump whatever comes over the TCP link.
+        while (ser.inWaiting()):
+            ret.append(ser.readline())
+            lp = 0  # Keep timeout reset as long as stuff in flowing.
+        if len(ret) > 0 and "CLOSED" in ret[-1]: break
+        sleep(0.1)
+        lp += 0.1
+    return ret
+
 
 if len(sys.argv) != 5:
     print "Usage: esp8266test.py port baud_rate ssid password"
@@ -78,23 +96,17 @@ try:
 
     servIP="192.168.1.6"
     servPort=8457
-    s = send_cmd( "AT+CIPSTART=\"TCP\",\"{}\",{}".format(servIP, str(servPort)), 10)
+    s = send_cmd("AT+CIPSTART=\"TCP\",\"{}\",{}".format(servIP, str(servPort)), 10)
     if( s[-1] == 'OK' and s[1] == "CONNECT"):
-        cmd = 'DATA from project\n'
-        cmdLn = str( len(cmd) )
-        s = send_cmd( "AT+CIPSEND=" + cmdLn, sTerm=">" )
+        data = 'DATA from project\n'
+        dataLn = str( len(data) )
+        s = send_cmd("AT+CIPSEND=" + dataLn, sTerm=[">"])
         #sleep( 1 )
-        send_cmd( cmd, sTerm="SEND OK" )
+        send_cmd(data, sTerm=["SEND OK"] )
         #sleep( 2 )
         #wifiCommand( "+IPD" )
-        i = 5
-        while( i > 0 ):		# Dump whatever comes over the TCP link.
-            while( ser.inWaiting() ):
-                sys.stdout.write( ser.read() )
-                i = 5 	# Keep timeout reset as long as stuff in flowing.
-            sys.stdout.flush()
-            i -= 1
-            sleep( 1 )
+        data = rx_data()
+        print data
     else:
         print "Error:"
         ser.write( "\r\n" )
@@ -107,8 +119,6 @@ try:
             sys.stdout.flush()
             i -= 1
             sleep( 1 )
-
-    send_cmd("AT+CIPCLOSE")
 
 finally:
     ser.close()
