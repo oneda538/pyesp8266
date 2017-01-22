@@ -6,15 +6,17 @@ import sys, serial
 from time import *
 import datetime, string
 
+
 def enum(**enums):
     return type('Enum', (), enums)
 
 Status = enum(ERR='ERROR', OK=['OK', 'ready', 'no change'], BUSY='busy')
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 
+
 # modified code from: http://www.instructables.com/id/Easy-ESP8266-WiFi-Debugging-with-Python/step2/Software/
-def send_cmd(sCmd, waitTm=1, retry=5):
-    lp = 0
+def send_cmd(sCmd, waitTm=1, retry=1, sTerm=Status.OK):
+    lp = 0.0
     ret = ""
 
     logging.info("Sending command: %s" % sCmd)
@@ -23,21 +25,21 @@ def send_cmd(sCmd, waitTm=1, retry=5):
         ser.flushInput()
         ser.write(sCmd + "\r\n")
         ret = []
-        ret.append(ser.readline().strip("\r\r\n"))  # Eat echo of command.
+        ret.append(ser.readline().strip("\r\r\n"))  # Echo of command.
         sleep(0.2)
         while (lp < waitTm or Status.BUSY in ret[-1]):
             while (ser.inWaiting()):
                 ret.append(ser.readline().strip("\r\n"))
                 logging.debug(ret[-1])
                 lp = 0
-            if (ret in Status.OK): break
+            if (ret[-1] in sTerm): break
             # if( ret == 'ready' ): break
-            if (ret == Status.ERR): break
-            sleep(1)
-            lp += 1
+            if (ret[-1] == Status.ERR): break
+            sleep(0.1)
+            lp += 0.1
 
         sleep(1)
-        if (ret[-1] in Status.OK): break
+        if (ret[-1] in sTerm): break
 
     logging.info("Command result: %s" % ret)
     return ret
@@ -52,7 +54,7 @@ speed = sys.argv[2]
 ssid = sys.argv[3]
 pwd = sys.argv[4]
 
-ser = serial.Serial(port, speed)
+ser = serial.Serial(port, speed, timeout=0.1)
 try:
     if ser.isOpen():
         ser.close()
@@ -73,6 +75,40 @@ try:
         send_cmd("AT+CWJAP=\"" + ssid + "\",\"" + pwd + "\"", 5)  # connect
 
     addr = send_cmd("AT+CIFSR", 5)  # check IP address
+
+    servIP="192.168.1.6"
+    servPort=8457
+    s = send_cmd( "AT+CIPSTART=\"TCP\",\"{}\",{}".format(servIP, str(servPort)), 10)
+    if( s[-1] == 'OK' and s[1] == "CONNECT"):
+        cmd = 'DATA from project\n'
+        cmdLn = str( len(cmd) )
+        s = send_cmd( "AT+CIPSEND=" + cmdLn, sTerm=">" )
+        #sleep( 1 )
+        send_cmd( cmd, sTerm="SEND OK" )
+        #sleep( 2 )
+        #wifiCommand( "+IPD" )
+        i = 5
+        while( i > 0 ):		# Dump whatever comes over the TCP link.
+            while( ser.inWaiting() ):
+                sys.stdout.write( ser.read() )
+                i = 5 	# Keep timeout reset as long as stuff in flowing.
+            sys.stdout.flush()
+            i -= 1
+            sleep( 1 )
+    else:
+        print "Error:"
+        ser.write( "\r\n" )
+        sleep( 0.5 )
+        i = 5
+        while( (i > 0) and ser.inWaiting() ):	# Dump whatever is in the Rx buffer.
+            while( ser.inWaiting() ):
+                sys.stdout.write( ser.read() )
+                i = 5 	# Keep timeout reset as long as stuff in flowing.
+            sys.stdout.flush()
+            i -= 1
+            sleep( 1 )
+
+    send_cmd("AT+CIPCLOSE")
 
 finally:
     ser.close()
